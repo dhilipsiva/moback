@@ -1,28 +1,34 @@
+from flask import Flask
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import MetaData, create_engine, Table
+from sqlalchemy import MetaData, Table
 import base64
-import miscs
+from utils import hmac_sign
 import uuid
+from flask.ext.sqlalchemy import SQLAlchemy
 from config import get_settings
-
 
 '''
 To create new secret-keys, use cookie_secret.py script
 Warning : do not change after production. All validations
 will fail if you do.
 '''
-secret_key = 'Oh6a4uJLS7WX8h64Pe/X0ubFoiypaUKktX0xNHXy1No='
+secret_key = 'a_secret_key'
+
 DBBase = declarative_base()
+
+
 settings = get_settings()
 dbSett = settings['db']
 database = dbSett['database']
 user = dbSett['username']
 password = dbSett['password']
 host = dbSett['host']
-engine = create_engine('postgresql+psycopg2://' + user +
-        ':' + password + '@' + host + '/' + database,
-        echo=True)
-metadata = MetaData(bind=engine)
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = \
+    'postgresql+psycopg2://' + user +\
+    ':' + password + '@' + host + '/' + database
+db = SQLAlchemy(app)
+metadata = MetaData(bind=db.engine)
 
 
 class Person(DBBase):
@@ -33,13 +39,13 @@ class Person(DBBase):
             self.id = int(form.id.data)
         except:
             self.id = None
-        self.email = form.email.data.lower()
+        self.email = form.email.data
         self.firstname = form.firstname.data
         self.lastname = form.lastname.data
-        self.username = form.username.data.lower()
+        self.username = form.username.data
 
         passwd = base64.b64decode(form.password.data)
-        pw_hash = miscs.hmac_sign(secret_key, passwd)
+        pw_hash = hmac_sign(secret_key, passwd)
         access_token = str(uuid.uuid5(
             uuid.uuid1(), str(uuid.uuid1())))
 
@@ -56,35 +62,29 @@ class Person(DBBase):
 
     def verify_passwd(self, passwd):
         passwd = base64.b64decode(passwd)
-        pw_hash = miscs.hmac_sign(secret_key, passwd)
+        pw_hash = hmac_sign(secret_key, passwd)
         return pw_hash == self.pw_hash
 
     def json_data(self):
-        data = {'id': self.id,
-                'email': self.email,
-                'firstname': self.firstname,
-                'lastname': self.lastname,
-                'username': self.username,
-                'start_date': str(self.start_date),
-                'total_score': self.total_score,
-        }
+        data = {
+            'username': self.username,
+            'total_score': self.total_score, }
         return data
 
 
-class Point(DBBase):
-    __table__ = Table('point', metadata, autoload=True)
+class Score(DBBase):
+    __table__ = Table('score', metadata, autoload=True)
 
-    def __init__(self, form):
+    def __init__(self, form, person_id):
         self.id = form.id.data
-        self.person_id = form.person_id.data
-        self.score = form.score.data
+        self.score_count = form.score_count.data
         self.score_time = form.score_time.data
+        self.person_id = person_id
 
     def json_data(self):
         data = {
-                'id': self.id,
-                'person_id': self.person_id,
-                'score': self.score,
-                'score_time': str(self.score_time),
-                }
+            'id': self.id,
+            'person_id': self.person_id,
+            'score_count': self.score_count,
+            'score_time': str(self.score_time), }
         return data

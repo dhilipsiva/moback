@@ -1,7 +1,7 @@
 import moback
 import unittest
 import json
-from moback_utils import make_query
+from utils import make_query
 import uuid
 
 
@@ -18,23 +18,18 @@ class MobackTestCase(unittest.TestCase):
     def test_score(self):
         '''Testing insertion of score'''
         data = dict(
-                duration=5,
-                difficulty='hard',
-                practice_point=100,
-                speed=0.2,
-                accuracy=70,
-                access_token=uuid.uuid1(),
-                id=uuid.uuid1()
-                )
-        r = self.app.post(make_query('/api/v1/point', data))
+            score_count=100,
+            access_token=uuid.uuid1(),
+            id=uuid.uuid1())
+        r = self.app.post(make_query('/api/v1/score', data))
+        print r.data
 
     def test_get_scores(self):
         '''Testing getting scores from thje user'''
         data = dict(
-                person_id='1',
-                access_token='f830f634-cc22-5fc2-b7d1-ca07353faa95'
-                )
-        r = self.app.get(make_query('/api/v1/point', data))
+            person_id='1',
+            access_token='f830f634-cc22-5fc2-b7d1-ca07353faa95')
+        r = self.app.get(make_query('/api/v1/score', data))
         print r.data
 if __name__ == '__main__':
     unittest.main()

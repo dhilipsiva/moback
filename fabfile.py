@@ -6,25 +6,27 @@ import re
 import socket
 from server.config import get_settings_prod
 import paramiko
+from fabric.contrib.files import sed, append
 
 PACKAGES_TO_INSTALL = [
     'libpq-dev',
     'python-dev',
-    'nginx',
+    'nginx-extras',
     'python-virtualenv',
     'supervisor',
     'postgresql-9.1',
-    'vim',                  # useful while sshing into the terminal
-    'tmux',                 # I really, really need this
+    'fail2ban',
+    'vim',
+    'tmux',
 ]
 
-DD_API_KEY = 'blah-blah'  # Datadog api key.
-AWS_HOST = 'blah.com'  # Amazon EC2 URL.
+DD_API_KEY = '1234567890abcd'  # Datadog api key.
+AWS_HOST = 'api.mobackapp.com'  # Amazon EC2 URL.
 APP_NAME = 'moback'  # Name of the application.
 USER_NAME = APP_NAME  # Username in which the app should be running.
 
 
-# Test Method
+# Say Hello
 @task
 def hello_world():
     '''Just a test task to test connecitvity'''
@@ -173,7 +175,7 @@ def setup_db():
         " TO {dbuser};\"",
 
         "psql -c \"CREATE DATABASE"
-        " {dbname} WITH owner={dbuser} ENCODING='utf-8';\"",
+        " {dbname} WITH owner={dbuser};\"",
     ]
     for q in queries:
         try:
@@ -214,34 +216,72 @@ def ping_untill_starts():
         counter += 1
 
 
-def restart_uwsgi():
-    sudo('. /home/%s/ENV/bin/activate && uwsgi --reload /tmp/moback.pid'
-         % USER_NAME, user='www-data')
+@task
+def restart_server():
+    sudo('supervisorctl restart moback')
 
 
 @task
 def deploy_code():
     '''Deploy latest commit and restart uwsgi'''
     copy_source()
-    restart_uwsgi()
+    restart_server()
+
+
+@task
+def configure_ebs():
+    '''configure ebs volume for postgres befor executing this method
+    sudo su -
+    yes | mkfs -t ext3 /dev/xvdf
+    mkdir /data
+    mount /dev/xvdf /data
+    '''
+
+    with settings(warn_only=True):
+        with cuisine.mode_sudo():
+            run('service postgresql stop')
+            run('rm -rf /data/lost+found')
+            run('mkdir /data/lib/')
+            run('mkdir /data/lib/PostgreSQL')
+            run('mkdir /data/lib/PostgreSQL/9.1')
+            run('mkdir /data/lib/PostgreSQL/9.1/main')
+            run('cp -r /var/lib/postgresql/9.1/main /data/lib/PostgreSQL/9.1')
+            run('chown -R postgres:postgres /data/lib/PostgreSQL')
+            run('chmod 0700 /data/lib/PostgreSQL/9.1/main')
+            run('touch /data/moback.log')
+            run('chmod 777 /data/moback.log')
+
+    append(
+        '/etc/fstab',
+        '/dev/xvdf   /data   ext3    defaults 0 0', use_sudo=True)
+    sed('/etc/postgresql/9.1/main/postgresql.conf',
+        '/var/lib/postgresql/9.1/main',
+        '/data/lib/PostgreSQL/9.1/main',
+        use_sudo=True)
+    append(
+        '/etc/postgresql/9.1/main/postgresql.conf',
+        "listen_addresses = '*'", True)
+    with settings(warn_only=True):
+        with cuisine.mode_sudo():
+            run('service postgresql start')
+            run('service postgresql reload')
 
 
 @task
 def deploy_full(production='false'):
     '''Fresh and full deploy'''
     update()
-    if env.user != 'vagrant':
-        upgrade()
+    upgrade()
     ensure_packages()
-    if production == 'true':
-        install_datadog()
+    install_datadog()
     create_user()
     create_virtualenv()
     copy_source()
     install_python_reqs()
     copy_confs()
     setup_db()
-    restart_uwsgi()
+    configure_ebs()
+    restart_server()
     reboot()
     ping_untill_starts()
 
@@ -254,11 +294,3 @@ def ssh():
             local('ssh -i moback.pem ubuntu@' + AWS_HOST)
     except:
         pass
-
-
-@task
-def hack_task():
-    '''
-    Just a quick hack task to use during development
-    '''
-    setup_db()
