@@ -9,7 +9,3 @@ This is just a boilerplate
 1. PostgreSQL
 2. Supervisor
 2. NginX
-
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/dhilipsiva/moback/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
-
