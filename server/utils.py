@@ -5,7 +5,7 @@ import urllib
 
 BASE62_ALPHABET = string.digits + string.ascii_letters
 BASE92_ALPHABET = \
-    BASE62_ALPHABET + '~!@#$%^&*()_-+={}[];"\'<>,.?/|\\'
+    BASE62_ALPHABET + '~!@#$%^&*()_-+=[];"\'<>,.?/|\\'
 
 
 def base92_encode(num):
